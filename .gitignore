@@ -1,0 +1,10 @@
+/target
+*.mkv
+*.mp4
+*.txt
+*.dll
+*.png
+*.jpg
+*.sh
+*.bat
+/segments
