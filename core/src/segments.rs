@@ -1,12 +1,21 @@
 use color_eyre::eyre::{Result, WrapErr};
 use opencv::videoio::{VideoCapture, VideoCaptureTraitConst, CAP_PROP_FPS, CAP_PROP_FRAME_COUNT};
 
-use crate::cmd::CliArgs;
-
 pub type TimeRange = (f64, f64);
 
-pub fn frames_to_segments(
-	args: &CliArgs,
+pub fn frames_to_segments<ExceedingFrames>(
+	padding: f64,
+	capture: &VideoCapture,
+	exceeding_frames: ExceedingFrames,
+) -> Result<Vec<TimeRange>>
+where
+	ExceedingFrames: AsRef<[usize]>,
+{
+	frames_to_segments_impl(padding, capture, exceeding_frames.as_ref())
+}
+
+fn frames_to_segments_impl(
+	padding: f64,
 	capture: &VideoCapture,
 	exceeding_frames: &[usize],
 ) -> Result<Vec<TimeRange>> {
@@ -19,8 +28,8 @@ pub fn frames_to_segments(
 
 	for i in 1..exceeding_frames.len() {
 		if exceeding_frames[i] - exceeding_frames[i - 1] > 1 {
-			let start_time = (start_frame as f64 / fps) - args.padding;
-			let end_time = (end_frame as f64 / fps) + args.padding;
+			let start_time = (start_frame as f64 / fps) - padding;
+			let end_time = (end_frame as f64 / fps) + padding;
 			time_ranges.push((start_time, end_time));
 
 			start_frame = exceeding_frames[i];
@@ -29,8 +38,8 @@ pub fn frames_to_segments(
 	}
 
 	// Add the last range if it was continuous
-	let start_time = (start_frame as f64 / fps) - args.padding;
-	let end_time = (end_frame as f64 / fps) + args.padding;
+	let start_time = (start_frame as f64 / fps) - padding;
+	let end_time = (end_frame as f64 / fps) + padding;
 	time_ranges.push((start_time, end_time));
 
 	let mut merged_time_ranges = Vec::new();

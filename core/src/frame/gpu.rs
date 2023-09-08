@@ -1,4 +1,4 @@
-use crate::{cmd::CliArgs, FrameReceiver, MatchedFrameSender, FRAMES_PROCESSED};
+use crate::{cmd::ScrubArgs, scrub::FRAMES_PROCESSED, FrameReceiver, MatchedFrameSender};
 use color_eyre::eyre::{eyre, ContextCompat, Result, WrapErr};
 use opencv::{
 	core::{self, GpuMat, Point, Ptr, Size, Stream, CV_8U},
@@ -14,7 +14,7 @@ use std::{
 };
 
 pub fn process_frame(
-	args: &CliArgs,
+	args: &ScrubArgs,
 	stream: &mut Stream,
 	result: &mut GpuMat,
 	matching: &mut Ptr<CUDA_TemplateMatching>,
@@ -54,7 +54,7 @@ pub fn process_frame(
 }
 
 pub fn worker_thread(
-	args: &CliArgs,
+	args: &ScrubArgs,
 	templates: Vec<Mat>,
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,
@@ -101,7 +101,7 @@ pub fn worker_thread(
 }
 
 pub fn spawn_threads(
-	args: Arc<CliArgs>,
+	args: Arc<ScrubArgs>,
 	templates: &[Mat],
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,

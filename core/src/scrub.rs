@@ -1,15 +1,13 @@
-pub mod cmd;
-pub mod frame;
-pub mod segments;
-pub mod video;
-
-use clap::Parser;
+use crate::{
+	frame::{self, Frame},
+	segments, templates, video,
+};
 use color_eyre::eyre::{ContextCompat, Result, WrapErr};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use indicatif::{HumanCount, ProgressBar, ProgressState, ProgressStyle};
 use opencv::{
 	core::Mat,
-	imgcodecs::{self, IMREAD_GRAYSCALE},
+	imgcodecs::IMREAD_GRAYSCALE,
 	videoio::{VideoCapture, VideoCaptureTraitConst, CAP_FFMPEG, CAP_PROP_FRAME_COUNT},
 };
 use parking_lot::Mutex;
@@ -23,22 +21,9 @@ use std::{
 };
 use thread_priority::{ThreadBuilderExt, ThreadPriority};
 
-pub type Frame = (Mat, usize);
-pub type FrameSender = Sender<Frame>;
-pub type FrameReceiver = Receiver<Frame>;
-pub type MatchedFrameSender = Sender<usize>;
-pub type MatchedFrameReceiver = Receiver<usize>;
-
-#[global_allocator]
-static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
-
-pub static FRAMES_PROCESSED: AtomicUsize = AtomicUsize::new(1);
 pub static DONE_PROCESSING: AtomicBool = AtomicBool::new(false);
 
-fn main() -> Result<()> {
-	color_eyre::install().wrap_err("failed to install color eyre handler")?;
-	let args = Arc::new(cmd::CliArgs::parse());
-
+pub fn scrub(args: ScrubArgs) -> Result<()> {
 	let (frame_sender, frame_receiver) = unbounded::<Frame>();
 	let (result_sender, result_receiver) = unbounded::<usize>();
 	let exceeding_frames = Arc::new(Mutex::new(Vec::<usize>::new()));
@@ -46,8 +31,6 @@ fn main() -> Result<()> {
 	if let Some(opts) = &args.ffmpeg_opts {
 		std::env::set_var("OPENCV_FFMPEG_CAPTURE_OPTIONS", opts);
 	}
-
-	opencv::core::set_use_ipp(true).wrap_err("failed to enable ipp")?;
 
 	// Read in the video file
 	let mut capture = VideoCapture::from_file(
@@ -69,21 +52,10 @@ fn main() -> Result<()> {
 		}
 	});
 
-	// Spawn worker threads
-	let templates = args
-		.template
-		.iter()
-		.map(|template| {
-			imgcodecs::imread(
-				template
-					.to_str()
-					.wrap_err("invalid template path cannot be represented as a str")?,
-				IMREAD_GRAYSCALE,
-			)
-			.wrap_err_with(|| format!("failed to read image from {}", template.display()))
-		})
-		.collect::<Result<Vec<_>>>()
-		.wrap_err("failed to parse templates")?;
+	let pos_templates = templates::load_multi(&args.pos_templates, IMREAD_GRAYSCALE)
+		.wrap_err("failed to parse positive templates")?;
+	let neg_templates = templates::load_multi(&args.neg_templates, IMREAD_GRAYSCALE)
+		.wrap_err("failed to parse negative templates")?;
 
 	if args.cuda {
 		if opencv::core::get_cuda_enabled_device_count().unwrap_or(0) <= 0 {
@@ -108,7 +80,8 @@ fn main() -> Result<()> {
 		println!("using normal CPU");
 		frame::cpu::spawn_threads(
 			args.clone(),
-			&templates,
+			&pos_templates,
+			&neg_templates,
 			frame_receiver.clone(),
 			result_sender.clone(),
 		)

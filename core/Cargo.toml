@@ -1,0 +1,17 @@
+[package]
+name = "video-scrubber-core"
+description = "Core functionality for video-scrubber"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lucy <lucy@absolucy.moe>"]
+license = "0BSD"
+repository = "https://github.com/Absolucy/video-scrubber"
+
+[dependencies]
+ffmpeg-next = "6"
+opencv = { version = "0.84", default-features = false, features = ["clang-runtime", "imgcodecs", "imgproc", "videoio", "highgui"] }
+walkdir = "2.4"
+core_affinity = "0.8"
+crossbeam-channel = "0.5"
+color-eyre = "0.6"
+parking_lot = "0.12"

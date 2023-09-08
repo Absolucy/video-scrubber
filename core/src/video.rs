@@ -1,14 +1,28 @@
-use crate::{cmd::CliArgs, segments::TimeRange};
+use crate::segments::TimeRange;
 use color_eyre::eyre::{ContextCompat, Result, WrapErr};
 use ffmpeg_next as ffmpeg;
+use std::path::Path;
 
-pub fn splice_video(args: &CliArgs, segments: &[TimeRange]) -> Result<()> {
+pub fn splice_video<Input, Output, Segments>(
+	input: Input,
+	output: Output,
+	segments: Segments,
+) -> Result<()>
+where
+	Input: AsRef<Path>,
+	Output: AsRef<Path>,
+	Segments: AsRef<[TimeRange]>,
+{
+	splice_video_impl(input.as_ref(), output.as_ref(), segments.as_ref())
+}
+
+fn splice_video_impl(input: &Path, output: &Path, segments: &[TimeRange]) -> Result<()> {
 	ffmpeg::init().wrap_err("failed to initialize ffmpeg")?;
 
-	let mut ictx = ffmpeg::format::input(&args.input)
-		.wrap_err_with(|| format!("failed to open input file at {}", args.input.display()))?;
-	let mut octx = ffmpeg::format::output(&args.output)
-		.wrap_err_with(|| format!("failed to open output file at {}", args.output.display()))?;
+	let mut ictx = ffmpeg::format::input(&input)
+		.wrap_err_with(|| format!("failed to open input file at {}", input.display()))?;
+	let mut octx = ffmpeg::format::output(&output)
+		.wrap_err_with(|| format!("failed to open output file at {}", output.display()))?;
 
 	for (index, istream) in ictx.streams().enumerate() {
 		let input_parameters = istream.parameters();
