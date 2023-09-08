@@ -11,7 +11,8 @@ use opencv::{
 	core::{get_cuda_enabled_device_count, Mat, Vector},
 	imgcodecs::{self, IMREAD_COLOR},
 	videoio::{
-		VideoCapture, VideoCaptureProperties, VideoCaptureTraitConst, CAP_ANY, CAP_PROP_FRAME_COUNT,
+		VideoAccelerationType, VideoCapture, VideoCaptureProperties, VideoCaptureTraitConst,
+		CAP_ANY, CAP_PROP_FRAME_COUNT,
 	},
 };
 use parking_lot::Mutex;
@@ -45,8 +46,10 @@ fn main() -> Result<()> {
 	let (result_sender, result_receiver) = unbounded::<usize>();
 	let exceeding_frames = Arc::new(Mutex::new(Vec::<usize>::new()));
 
-	let capture_properties =
-		Vector::from_slice(&[VideoCaptureProperties::CAP_PROP_HW_ACCELERATION as i32, 1]);
+	let capture_properties = Vector::from_slice(&[
+		VideoCaptureProperties::CAP_PROP_HW_ACCELERATION as i32,
+		VideoAccelerationType::VIDEO_ACCELERATION_ANY as i32,
+	]);
 
 	// Read in the video file
 	let mut capture = VideoCapture::from_file_with_params(
