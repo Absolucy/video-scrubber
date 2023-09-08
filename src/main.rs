@@ -8,12 +8,9 @@ use color_eyre::eyre::{ContextCompat, Result, WrapErr};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use indicatif::{HumanCount, ProgressBar, ProgressState, ProgressStyle};
 use opencv::{
-	core::{get_cuda_enabled_device_count, Mat, Vector},
+	core::{get_cuda_enabled_device_count, Mat},
 	imgcodecs::{self, IMREAD_COLOR},
-	videoio::{
-		VideoAccelerationType, VideoCapture, VideoCaptureProperties, VideoCaptureTraitConst,
-		CAP_ANY, CAP_PROP_FRAME_COUNT,
-	},
+	videoio::{VideoCapture, VideoCaptureTraitConst, CAP_FFMPEG, CAP_PROP_FRAME_COUNT},
 };
 use parking_lot::Mutex;
 use std::{
@@ -35,7 +32,7 @@ pub type MatchedFrameReceiver = Receiver<usize>;
 #[global_allocator]
 static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
-pub static FRAMES_PROCESSED: AtomicUsize = AtomicUsize::new(0);
+pub static FRAMES_PROCESSED: AtomicUsize = AtomicUsize::new(1);
 pub static DONE_PROCESSING: AtomicBool = AtomicBool::new(false);
 
 fn main() -> Result<()> {
@@ -46,18 +43,16 @@ fn main() -> Result<()> {
 	let (result_sender, result_receiver) = unbounded::<usize>();
 	let exceeding_frames = Arc::new(Mutex::new(Vec::<usize>::new()));
 
-	let capture_properties = Vector::from_slice(&[
-		VideoCaptureProperties::CAP_PROP_HW_ACCELERATION as i32,
-		VideoAccelerationType::VIDEO_ACCELERATION_ANY as i32,
-	]);
+	if let Some(opts) = &args.ffmpeg_opts {
+		std::env::set_var("OPENCV_FFMPEG_CAPTURE_OPTIONS", opts);
+	}
 
 	// Read in the video file
-	let mut capture = VideoCapture::from_file_with_params(
+	let mut capture = VideoCapture::from_file(
 		args.input
 			.to_str()
 			.wrap_err("invalid input path cannot be represented as a str")?,
-		CAP_ANY,
-		&capture_properties,
+		CAP_FFMPEG,
 	)
 	.wrap_err_with(|| format!("failed to read video from {}", args.input.display()))?;
 

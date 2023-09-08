@@ -31,6 +31,9 @@ pub struct CliArgs {
 	/// How many threads to use. Defaults to the amount of logical cores.
 	#[arg(short = 'j', long)]
 	pub threads: Option<usize>,
+	/// The ffmpeg options to force.
+	#[arg(short, long)]
+	pub ffmpeg_opts: Option<String>,
 }
 
 fn parse_rect(arg: &str) -> Result<Rect> {
