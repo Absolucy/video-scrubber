@@ -35,7 +35,7 @@ pub struct ScrubArgs {
 	#[arg(short = 'm', default_value = "0.7")]
 	pub pos_threshold: f64,
 	/// The minimum negative match threshold (0-1).
-	#[arg(short = 'x', default_value = "0.6")]
+	#[arg(short = 'x', default_value = "0.7")]
 	pub neg_threshold: f64,
 	/// How many seconds to pad out removal ranges with, just to be sure.
 	#[arg(short = 'f', long, default_value = "1.0")]
@@ -43,9 +43,6 @@ pub struct ScrubArgs {
 	/// The bounds of the region of interest (x,y,width,height).
 	#[arg(short, long, value_parser = parse_rect)]
 	pub bounds: Option<Rect>,
-	/// Use CUDA acceleration.
-	#[arg(long)]
-	pub cuda: bool,
 	/// How many threads to use. Defaults to the amount of logical cores.
 	#[arg(short = 'j', long)]
 	pub threads: Option<usize>,
