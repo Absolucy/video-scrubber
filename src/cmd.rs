@@ -11,8 +11,8 @@ pub struct CliArgs {
 	#[arg(short, long)]
 	pub input: PathBuf,
 	/// The template image file.
-	#[arg(short, long, default_value = "template.png")]
-	pub template: PathBuf,
+	#[arg(short, long)]
+	pub template: Vec<PathBuf>,
 	/// The file to output to.
 	#[arg(short, default_value = "output.mkv")]
 	pub output: PathBuf,

@@ -6,6 +6,7 @@ use crate::FrameSender;
 use color_eyre::eyre::{eyre, Context, Result};
 use opencv::{
 	core::Mat,
+	imgproc::COLOR_BGR2GRAY,
 	videoio::{VideoCapture, VideoCaptureTrait},
 };
 
@@ -19,8 +20,11 @@ pub fn send_frames(capture: &mut VideoCapture, frame_sender: FrameSender) -> Res
 		{
 			break;
 		}
+		let mut grey_frame = Mat::default();
+		opencv::imgproc::cvt_color(&frame, &mut grey_frame, COLOR_BGR2GRAY, 0)
+			.wrap_err("failed to convert frame to greyscale")?;
 		frame_sender
-			.send((frame, frame_num))
+			.send((grey_frame, frame_num))
 			.map_err(|_| eyre!("failed to send frame {frame_num} to worker threads"))?;
 		frame_num += 1;
 	}

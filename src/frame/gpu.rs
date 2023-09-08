@@ -19,44 +19,58 @@ pub fn process_frame(
 	result: &mut GpuMat,
 	matching: &mut Ptr<CUDA_TemplateMatching>,
 	frame: &GpuMat,
-	template: &GpuMat,
+	templates: &[GpuMat],
 ) -> Result<bool> {
 	let frame = match args.bounds {
 		Some(bounds) => Cow::Owned(GpuMat::roi(frame, bounds).wrap_err("invalid roi")?),
 		None => Cow::Borrowed(frame),
 	};
 
-	matching
-		.match_(&*frame, template, result, stream)
-		.wrap_err("failed to match template")?;
-
 	let mut _min_val = 0.0;
 	let mut max_val = 0.0;
 	let mut _min_loc = Point::default();
 	let mut _max_loc = Point::default();
-	cudaarithm::min_max_loc(
-		result,
-		&mut _min_val,
-		&mut max_val,
-		&mut _min_loc,
-		&mut _max_loc,
-		&core::no_array(),
-	)
-	.wrap_err("calculating global maximum value failed")?;
 
-	Ok(max_val >= args.threshold)
+	for template in templates {
+		matching
+			.match_(&*frame, template, result, stream)
+			.wrap_err("failed to match template")?;
+
+		cudaarithm::min_max_loc(
+			result,
+			&mut _min_val,
+			&mut max_val,
+			&mut _min_loc,
+			&mut _max_loc,
+			&core::no_array(),
+		)
+		.wrap_err("calculating global maximum value failed")?;
+		if max_val >= args.threshold {
+			return Ok(true);
+		}
+	}
+
+	Ok(false)
 }
 
 pub fn worker_thread(
 	args: &CliArgs,
-	template: Mat,
+	templates: Vec<Mat>,
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,
 ) -> Result<()> {
-	let mut template_gpu = GpuMat::default().wrap_err("failed to create template gpu mat")?;
-	template_gpu
-		.upload(&template)
-		.wrap_err("failed to upload template to gpu")?;
+	let templates = templates
+		.into_iter()
+		.map(|template| {
+			let mut template_gpu =
+				GpuMat::default().wrap_err("failed to create template gpu mat")?;
+			template_gpu
+				.upload(&template)
+				.wrap_err("failed to upload template to gpu")?;
+			Ok(template_gpu)
+		})
+		.collect::<Result<Vec<_>>>()
+		.wrap_err("failed to upload templates to gpu")?;
 	let mut result = GpuMat::default().wrap_err("failed to create result gpu mat")?;
 	let mut matching =
 		cudaimgproc::create_template_matching(CV_8U, TM_CCOEFF_NORMED, Size::default())
@@ -73,7 +87,7 @@ pub fn worker_thread(
 			&mut result,
 			&mut matching,
 			&frame_gpu,
-			&template_gpu,
+			&templates,
 		)
 		.wrap_err_with(|| format!("failed to process frame {frame_num} on gpu"))?
 		{
@@ -88,14 +102,14 @@ pub fn worker_thread(
 
 pub fn spawn_threads(
 	args: Arc<CliArgs>,
-	template: &Mat,
+	templates: &[Mat],
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,
 ) -> Result<()> {
 	let core_ids = core_affinity::get_core_ids().wrap_err("failed to get CPU core IDs")?;
 	for id in core_ids {
 		let args = args.clone();
-		let template = template.clone();
+		let templates = templates.to_vec();
 		let frame_receiver = frame_receiver.clone();
 		let result_sender = result_sender.clone();
 		thread::Builder::new()
@@ -104,7 +118,7 @@ pub fn spawn_threads(
 				if !core_affinity::set_for_current(id) {
 					eprintln!("failed to set thread affinity for core {}", id.id);
 				}
-				worker_thread(&args, template, frame_receiver, result_sender)
+				worker_thread(&args, templates, frame_receiver, result_sender)
 					.expect("gpu worker thread errored");
 			})
 			.wrap_err_with(|| format!("failed to spawn gpu worker on core {}", id.id))?;

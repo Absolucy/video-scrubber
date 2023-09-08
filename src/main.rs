@@ -8,8 +8,8 @@ use color_eyre::eyre::{ContextCompat, Result, WrapErr};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use indicatif::{HumanCount, ProgressBar, ProgressState, ProgressStyle};
 use opencv::{
-	core::{get_cuda_enabled_device_count, Mat},
-	imgcodecs::{self, IMREAD_COLOR},
+	core::Mat,
+	imgcodecs::{self, IMREAD_GRAYSCALE},
 	videoio::{VideoCapture, VideoCaptureTraitConst, CAP_FFMPEG, CAP_PROP_FRAME_COUNT},
 };
 use parking_lot::Mutex;
@@ -47,6 +47,8 @@ fn main() -> Result<()> {
 		std::env::set_var("OPENCV_FFMPEG_CAPTURE_OPTIONS", opts);
 	}
 
+	opencv::core::set_use_ipp(true).wrap_err("failed to enable ipp")?;
+
 	// Read in the video file
 	let mut capture = VideoCapture::from_file(
 		args.input
@@ -68,16 +70,23 @@ fn main() -> Result<()> {
 	});
 
 	// Spawn worker threads
-	let template = imgcodecs::imread(
-		args.template
-			.to_str()
-			.wrap_err("invalid template path cannot be represented as a str")?,
-		IMREAD_COLOR,
-	)
-	.wrap_err_with(|| format!("failed to read image from {}", args.template.display()))?;
+	let templates = args
+		.template
+		.iter()
+		.map(|template| {
+			imgcodecs::imread(
+				template
+					.to_str()
+					.wrap_err("invalid template path cannot be represented as a str")?,
+				IMREAD_GRAYSCALE,
+			)
+			.wrap_err_with(|| format!("failed to read image from {}", template.display()))
+		})
+		.collect::<Result<Vec<_>>>()
+		.wrap_err("failed to parse templates")?;
 
 	if args.cuda {
-		if get_cuda_enabled_device_count().unwrap_or(0) <= 0 {
+		if opencv::core::get_cuda_enabled_device_count().unwrap_or(0) <= 0 {
 			panic!("no CUDA devices found!");
 		}
 		#[cfg(feature = "cuda")]
@@ -85,7 +94,7 @@ fn main() -> Result<()> {
 			println!("using CUDA");
 			frame::gpu::spawn_threads(
 				args.clone(),
-				&template,
+				&templates,
 				frame_receiver.clone(),
 				result_sender.clone(),
 			)
@@ -96,10 +105,10 @@ fn main() -> Result<()> {
 			panic!("CUDA not supported!")
 		}
 	} else {
-		println!("using CPU");
+		println!("using normal CPU");
 		frame::cpu::spawn_threads(
 			args.clone(),
-			&template,
+			&templates,
 			frame_receiver.clone(),
 			result_sender.clone(),
 		)

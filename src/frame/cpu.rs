@@ -9,46 +9,56 @@ use std::{
 	thread,
 };
 
-pub fn process_frame(args: &CliArgs, result: &mut Mat, frame: Mat, template: &Mat) -> Result<bool> {
+pub fn process_frame(
+	args: &CliArgs,
+	result: &mut Mat,
+	frame: Mat,
+	templates: &[Mat],
+) -> Result<bool> {
 	let frame = match args.bounds {
 		Some(bounds) => Mat::roi(&frame, bounds).wrap_err("invalid roi")?,
 		None => frame,
 	};
 
-	// Perform template matching on the ROI
-	imgproc::match_template(
-		&frame,
-		template,
-		result,
-		imgproc::TM_CCOEFF_NORMED,
-		&core::no_array(),
-	)
-	.wrap_err("template matching failed")?;
-
-	// Check for a match with a threshold
 	let mut max_val: f64 = 0.0;
-	core::min_max_loc(
-		result,
-		None,
-		Some(&mut max_val),
-		None,
-		None,
-		&core::no_array(),
-	)
-	.wrap_err("calculating global maximum value failed")?;
+	for template in templates {
+		// Perform template matching on the ROI
+		imgproc::match_template(
+			&frame,
+			template,
+			result,
+			imgproc::TM_CCOEFF_NORMED,
+			&core::no_array(),
+		)
+		.wrap_err("template matching failed")?;
 
-	Ok(max_val >= args.threshold)
+		// Check for a match with a threshold
+		core::min_max_loc(
+			result,
+			None,
+			Some(&mut max_val),
+			None,
+			None,
+			&core::no_array(),
+		)
+		.wrap_err("calculating global maximum value failed")?;
+		if max_val >= args.threshold {
+			return Ok(true);
+		}
+	}
+
+	Ok(false)
 }
 
 pub fn worker_thread(
 	args: &CliArgs,
-	template: Mat,
+	templates: Vec<Mat>,
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,
 ) -> Result<()> {
 	let mut result = Mat::default();
 	for (frame, frame_num) in frame_receiver.iter() {
-		if process_frame(args, &mut result, frame, &template)
+		if process_frame(args, &mut result, frame, &templates)
 			.wrap_err_with(|| format!("failed to process frame {frame_num} on cpu"))?
 		{
 			result_sender.send(frame_num).map_err(|_| {
@@ -62,7 +72,7 @@ pub fn worker_thread(
 
 pub fn spawn_threads(
 	args: Arc<CliArgs>,
-	template: &Mat,
+	templates: &[Mat],
 	frame_receiver: FrameReceiver,
 	result_sender: MatchedFrameSender,
 ) -> Result<()> {
@@ -73,7 +83,7 @@ pub fn spawn_threads(
 		.take(args.threads.unwrap_or(usize::MAX))
 	{
 		let args = args.clone();
-		let template = template.clone();
+		let templates = templates.to_vec();
 		let frame_receiver = frame_receiver.clone();
 		let result_sender = result_sender.clone();
 		thread::Builder::new()
@@ -82,7 +92,7 @@ pub fn spawn_threads(
 				if !core_affinity::set_for_current(id) {
 					eprintln!("failed to set thread affinity for core {}", id.id);
 				}
-				worker_thread(&args, template, frame_receiver, result_sender)
+				worker_thread(&args, templates, frame_receiver, result_sender)
 					.expect("cpu worker thread errored");
 			})
 			.wrap_err_with(|| format!("failed to spawn cpu worker on core {}", id.id))?;
