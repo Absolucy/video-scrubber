@@ -3,8 +3,7 @@ use opencv::{core::Mat, imgcodecs};
 use std::path::Path;
 use walkdir::WalkDir;
 
-fn load_image(path: &Path, flags: i32) -> Result<Mat> {
-	println!("loading {}", path.display());
+pub fn load_image(path: &Path, flags: i32) -> Result<Mat> {
 	let path = path
 		.to_str()
 		.wrap_err("invalid path cannot be represented as a str")?;

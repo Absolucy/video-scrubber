@@ -15,6 +15,7 @@ pub struct CliArgs {
 pub enum CliSubcommands {
 	Scrub(ScrubArgs),
 	Test(TestArgs),
+	Select(SelectArgs),
 }
 
 #[derive(Args)]
@@ -74,6 +75,13 @@ pub struct TestArgs {
 	pub bounds: Option<Rect>,
 	#[arg(long)]
 	pub color: bool,
+}
+
+#[derive(Args)]
+#[command(author, version, about, long_about = None)]
+pub struct SelectArgs {
+	/// The input image file.
+	pub input: PathBuf,
 }
 
 fn parse_rect(arg: &str) -> Result<Rect> {

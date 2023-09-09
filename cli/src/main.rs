@@ -1,5 +1,6 @@
 pub mod cmd;
 pub mod scrub;
+pub mod select;
 
 use self::cmd::{CliArgs, CliSubcommands};
 use clap::Parser;
@@ -14,5 +15,6 @@ fn main() -> Result<()> {
 	match args.command {
 		CliSubcommands::Scrub(args) => scrub::scrub(args),
 		CliSubcommands::Test(_args) => todo!(),
+		CliSubcommands::Select(args) => select::select(args),
 	}
 }
