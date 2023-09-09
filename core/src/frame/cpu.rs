@@ -76,7 +76,7 @@ fn process_frame(
 	Ok((matched, pos, neg))
 }
 
-pub fn worker_thread(
+fn worker_thread(
 	bounds: Option<Rect>,
 	pos_templates: Vec<Mat>,
 	neg_templates: Vec<Mat>,
